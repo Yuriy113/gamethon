@@ -1,0 +1,804 @@
+﻿{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "DatsDefense",
+    "version": "1.0",
+    "description": "\n<img src='./img/1.png' />\n\n**Легенда:** На планете случился зомби-апокалипсис. Неизвестный вирус превращает людей в зомби. Остаткам людей удалось скрыться в секретных лабораториях и разработать вакцину (антидот) моментального действия – она возвращает человеческий облик инфицированным.\n\n  Но за время разработки вакцины зомби стало так много, что неизвестно удастся ли переломить ситуацию.\n  Хаос начался! Сможете ли вы его остановить?\n\n\n  **Этапы** (время — UTC+03:00):\n\n  - 1-й день — 12.07.2024: с 19:00 по 22:00 — тренировочные раунды\n  - 2-й день — 13.07.2024:\n    - Тренировочные раунды: с 10:00 до 16:00\n    - Финальные раунды: с 16:00 до 20:00\n\n  Расписание раундов можно узнать по API \n\n  ### Игрокам предоставляется:\n  1. Карта.\n  2. База.\n  3. Золото.\n  4. API.\n\n# Сервер\n\n  Игрокам предоставляется 2 сервера - основной и тестовый.\n\n  Тестовый сервер будет работать 2 дня. После запуска основного сервера, тестовый продолжит работу, что бы осталась возможность дорабатывать свои алгоритмы.\n\n  Основной сервер запустится по указанному расписанию финальных игр.\n\n# Карта\n\n  Игрокам предоставляется карта, по API, с указанием координат спота зомби и стен.\n\n# Пошаговая механика\nИгра проходит в пошаговом режиме. Игроку даётся 2* секунды для того чтобы оценить обстановку и спланировать свои действия. В ответе API units будет информация о оставшемся времени до окончания хода.\n\nВ момент завершения хода сервер обрабатывает события в следующем порядке:\n  - производится атака клетками базы\n  - производится закупка и появление новых клеток базы\n  - производится перенос центра управления (если была соответствующая команда)\n  - зомби совершают передвижение\n  - зомби совершают атаку\n\nВ случае если 2 игрока атакуют одного зомби, то урон рассчитывается последовательно от каждого игрока. Приоритет игроков задается рандомно на каждый ход.\n\n*значение может быть изменено по результатам тестовых раундов.\n\n# База игрока\n\n  На старте игры каждый игрок получает базу размером 4 блока и 10 золотых монет.\n\n  Верхняя левая клетка является центром управления(isHead=true), из которого подаются команды во все остальные клетки. Если связь базы с основной клеткой будет нарушена - то игрок не сможет отдавать приказы клеткам, которые не связаны с базой. Клетки выполняют команду только 1 раз, после этого переходят в режим ожидания.\n\n  Здоровье центра управления 300, здоровье клетки базы 100. Эти цифры не меняются.\n\n\n  Игрок может перемещать свой центр управления в любую существующую клетку базы, с которой есть связь. В этом случае они поменяются местами.\n\n  Каждая клетка базы позволяет видеть объекты в радиусе 8(10 для центра управления) клеток от себя.\n\n  Игрок может покупать новые клетки базы за золото:\n  - Размещать новые клетки можно только впритык к одной из 4х сторон существующей клетки своей базы.\n  - Цена новой клетки базы - 1 золото.\n  - За один раз можно купить любое количество новых клеток.\n  - Блок базы нельзя строить на клетке, где находится зомби или клетка базы другого игрока.\n  - Блок базы нельзя строить в радиусе 1* клетки от блока базы оппонента.\n  - Блок базы нельзя ставить вплотную к клетке спота зомби, но можно ставить по диагонали.\n  - Блок базы нельзя ставить вплотную к клетке стены, но можно ставить по диагонали.\n\n   *квадрат со стороной 3 клетки, центром которого является указанный объект.\n\n  <img src='./img/002.jpeg' />\n\n# Атака клетками базы\n\n Каждая клетка базы игрока может производить атаку любой клетки в радиусе 5 с силой 10.\n  Клетка центра управления может атаковать в радиусе 8 с силой 40.\n\n  Можно производить атаку клетки, где находится клетка своей базы для уничтожения зомби, которые могут на ней находится.\n\n  Урон своим клеткам базы не наносится.\n\n  Если на указанной для атаки клетки находится несколько зомби, то все они получат урон.\n\n  Можно атаковать клетки базы других игроков.\n\n  Радиус атаки считается по теореме Пифагора dist <= sqrt(abs(x1-x2)^2 + abs(y1-y2)^2)\n\n  Визуализация радиуса атаки для радиуса 1,2,3,4,5\n\n  <img src='./img/003.png' />\n\n\n  # Клетки создания зомби\n\n  На карте располагаются клетки(type=default) из которых появляются зомби.\n\n  Из каждой стороны клетки с вероятностью Х и частотой раз в У ходов появляется один из типов зомби. (на частоту и вероятность влияет № хода).\n\n  Начальная вероятность появления зомби 1%, каждые 6* ходов вероятность увеличивается. Максимальная вероятность достигается к 300* ходу и составляет 50%*.\n\n  Сторона, клетки из которой выходит, зомби выбирается случайно. Сторона спота, которая примыкает к другому споту, не может участвовать в генерации зомби. Тип появляемого зомби определяется случайно.\n\n  Зомби не могут появиться с той стороны клетки, где к ней примыкает другая клетка создания зомби.\n\n  В первый свой ход, вне зависимости от своей скорости, зомби появляются на клетке, являющейся соседней(примыкающей) для клетки создания зомби.\n\n  \\* к финальным раундам значение может быть изменено.\n\n  # Клетки стены\n\n  На карте возможно существование клетки(type=wall), которая препятствует продвижению зомби.\n  Также, если зомби попадают на неё, они уничтожаются.\n\n  # Зомби\n\n  Появляется из специальных клеток на карте. Может двигаться только прямо(если не сказано обратного). Если по ходу движения он попадает на одну из специальных клеток - он исчезает.\n\n  Характеристики зомби будут расти в течение игры, в зависимости от № текущего хода. На старте раунда все зомби имеют 5 жизней, силу атаки 5 и скорость 1(если не указано иного).\n\n  Характеристики зомби плавно растут вплоть до 240* хода, после 240* характеристики резко увеличиваются и продолжают расти уже с большей скоростью. Для всех раундов(в том числе и финальных) механика здоровья, урона и динамики изменения остаются одинаковыми.\n\n  \\* к финальным раундам значение может быть изменено.\n  \n\n  Зомби имеет следующие характеристики:\n  - x - текущая координата\n  - y - текущая координата\n  - direction - направление движения\n  - id - уникальный идентификатор зомби\n  - health - текущее кол-во жизней\n  - speed - количество клеток, на которые переместится зомби.\n  - type - тип зомби (обычный, взрывник и т.д.)\n  - waitTurns - количество ходов до момента, когда зомби начнёт движение. В начале каждого хода вычитается 1 и если значение равно 0, то зомби совершит движение.\n  - attack - сила атаки\n\n  **Движение**\n\n  Зомби в большинстве случаев может двигаться только вперед(если у него в свойства не сказано иного).\n\n  Движение зомби происходит с учетом его характеристик waitTurns и speed.\n\n  По ходу своего движения зомби может находиться на одной клетке с другими зомби и на клетках базы.\n\n  Если в момент перемещения зомби на его пути окажутся клетки базы игрока, не зависимо от скорости перемещения зомби, он остановится с первой по пути клеткой и произведет атаку (см. раздел атака).\n\n  **Атака зомби**\n\n  После того как зомби произведет атаку он самоуничтожается (если в описании зомби не сказано иного).\n\n  **Типы зомби**\n\n  На рисунках зеленый цвет - база, синий - зомби, красный - клетка которую атакует зомби.\n\n  ***- normal*** - атакует одну клетку. Самоуничтожается после атаки.\n\n  <img src='./img/normal-b.png' />\n\n  Ни рисунке синий зомби после движения на 1 клетку произвел атаку красной клетки.\n\n  <img src='./img/z4.png' />\n\n  ***- fast*** - атакует одну клетку. Самоуничтожается после атаки. Имеет повышенную скорость 2.\n\n  <img src='./img/fast-b.png' />\n\n  Ни рисунке синий зомби после движения на 2 клетку произвел атаку красной клетки.\n\n  <img src='./img/z5.png' />\n\n  ***- bomber*** - атакует все клетки в радиусе 1 от себя. Самоуничтожается после атаки.\n\n  <img src='./img/bomber-b.png' />\n\n  На рисунке синий зомби после движения на 1 клетку вперёд произвёл атаку всех клеток в радиусе 1 от себя(затронутые клетки отмечены красным цветом).\n\n\n  <img src='./img/z6.png' />\n\n  ***- liner*** - атакует все клетки базы расположенные рядом друг с другом вне зависимости от их количества.  Самоуничтожается после атаки.\n\n  <img src='./img/liner-b.png' />\n\n  На рисунке синий зомби после движения на 1 клетку вперёд произвёл атаку всех клеток по ходу своего движения.\n\n  <img src='./img/z7.png' />\n\n  ***- juggernaut*** - уничтожает все клетки базы на которых окажется. В отличие от своих собратьев он не самоуничтожается, а всегда будет идти напролом, пока его не остановит игрок или специальные клетки.\n\n  <img src='./img/juggernaut-b.png' />\n\n  На рисунке синий зомби последовательно уничтожает клетки, отмеченные красным, на которых окажется.\n\n  <img src='./img/z8.png' />\n\n  ***- chaos_knight*** - атакует клетку в которой оказался. Двигается в соответствии с правилами движения коня в шахматах. Движение происходит всегда на 3 клетки вперед и одну клетку в сторону, сторона и поворот Г определяется рандомно каждый ход. После атаки не самоуничтожается.\n\n  <img src='./img/chaos_knight-b.png' />\n\n  Ни рисунке синим цветом показана начальная клетка движения зомби, коричневым - конечная, желтым - клетки базы, которые подверглись атаке.\n\n\n  <img src='./img/z9.png' />\n\n\n\n\n\n\n\n\n\n\n# Раунды\n\n  Финал будет происходить в несколько раундов. Раз в несколько раундов будет происходить смена карты.\n\n  На каждый раунд будет выделяться время на регистрацию. Если игрок не успел пройти регистрацию на раунд - он не участвует в этом раунде.\n\n# Очки\n\n  Игроки получают очки за каждый раунд в зависимости от того, на каком этапе они выбыли из него.\n\n  Игроки получают 10 очков за уничтожение клетки центра управления оппонента.\n\n  **Таблица с количеством очков в зависимости от очередности выбывания с карт:**\n\n <img src='./img/10.png' /> \n\n\n\n# Кто победит\n\n  Выиграет тот игрок, кто на момент окончания финала будет иметь больше всех очков в сумме за все раунды.\n\n  Если количество очков у нескольких игроков будет одинаковым, то выиграет тот, кто вылечил больше зомби.\n\n  Определение призовых мест производится только в случае наличия достаточного количества участвующих.\n\n  Статистику по раундам можно смотреть по ссылке — [Статистика](https://datsteam.dev/datsdefense/gamestats).\n\n# API\n\n  Вы уже получили свой токен при регистрации, это означает, что в каждый запрос необходимо добавлять заголовок X-Auth-Token с полученным вами значением.\n\n\n  **Cервер:** https://games.datsteam.dev/\n\n  **Тестовый сервер:** https://games-test.datsteam.dev/"
+  },
+  "servers": [
+    {
+      "url": "https://games.datsteam.dev/"
+    },
+    {
+      "url": "https://games-test.datsteam.dev/"
+    }
+  ],
+  "paths": {
+    "/play/zombidef/command": {
+      "post": {
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "play"
+        ],
+        "summary": "commands to build and attack, should be sent only once per turn",
+        "requestBody": {
+          "description": "build and attack commands",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/model.Command"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.ValidationErrors"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotAuthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrForbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotFound"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrTooManyUserRequests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/zombidef/participate": {
+      "put": {
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "play"
+        ],
+        "summary": "you MUST send this request in lobby time to participate in the game (once per round)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.ParticipateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotAuthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrForbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotFound"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrTooManyUserRequests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/zombidef/units": {
+      "get": {
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "play"
+        ],
+        "summary": "world parts around player that are changing during the game (zombies, players, current player, etc...)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.UnitsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotAuthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrForbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotFound"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrTooManyUserRequests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/play/zombidef/world": {
+      "get": {
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "play"
+        ],
+        "summary": "world parts around player that are not changing during the game (zombie zpots)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.MapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotAuthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrForbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrNotFound"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/swagger.ErrTooManyUserRequests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rounds/zombidef": {
+      "get": {
+        "tags": [
+          "play"
+        ],
+        "summary": "game rounds",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.RoundList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/puberr.PubErr"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "dto.BlockResponse": {
+        "type": "object",
+        "properties": {
+          "attack": {
+            "type": "integer",
+            "example": 10
+          },
+          "health": {
+            "type": "integer",
+            "example": 100
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+          },
+          "isHead": {
+            "type": "boolean",
+            "example": true
+          },
+          "lastAttack": {
+            "$ref": "#/components/schemas/model.Coordinate"
+          },
+          "range": {
+            "type": "integer",
+            "example": 5
+          },
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "dto.EnemyBaseResponse": {
+        "type": "object",
+        "properties": {
+          "attack": {
+            "type": "integer",
+            "example": 10
+          },
+          "health": {
+            "type": "integer",
+            "example": 100
+          },
+          "isHead": {
+            "type": "boolean",
+            "example": true
+          },
+          "lastAttack": {
+            "$ref": "#/components/schemas/model.Coordinate"
+          },
+          "name": {
+            "type": "string",
+            "example": "player-test"
+          },
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "dto.MapResponse": {
+        "type": "object",
+        "properties": {
+          "realmName": {
+            "type": "string",
+            "example": "map1"
+          },
+          "zpots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.ZpotResponse"
+            }
+          }
+        }
+      },
+      "dto.ParticipateResponse": {
+        "type": "object",
+        "properties": {
+          "startsInSec": {
+            "type": "integer",
+            "example": 300
+          }
+        }
+      },
+      "dto.PlayerResponse": {
+        "type": "object",
+        "properties": {
+          "enemyBlockKills": {
+            "type": "integer",
+            "format": "int32",
+            "example": 100
+          },
+          "gameEndedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2021-10-10T10:00:00Z"
+          },
+          "gold": {
+            "type": "integer",
+            "format": "int32",
+            "example": 100
+          },
+          "name": {
+            "type": "string",
+            "example": "player-test"
+          },
+          "points": {
+            "type": "integer",
+            "format": "int32",
+            "example": 100
+          },
+          "zombieKills": {
+            "type": "integer",
+            "format": "int32",
+            "example": 100
+          }
+        }
+      },
+      "dto.UnitsResponse": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.BlockResponse"
+            }
+          },
+          "enemyBlocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.EnemyBaseResponse"
+            }
+          },
+          "player": {
+            "$ref": "#/components/schemas/dto.PlayerResponse"
+          },
+          "realmName": {
+            "type": "string",
+            "example": "map1"
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "turnEndsInMs": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1000
+          },
+          "zombies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.ZombieResponse"
+            }
+          }
+        }
+      },
+      "dto.ValidationErrors": {
+        "type": "object",
+        "properties": {
+          "acceptedCommands": {
+            "$ref": "#/components/schemas/model.Command"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "coordinate at {0 0} is already occupied"
+            ]
+          }
+        }
+      },
+      "dto.ZombieResponse": {
+        "type": "object",
+        "properties": {
+          "attack": {
+            "type": "integer",
+            "format": "int32",
+            "example": 10
+          },
+          "direction": {
+            "type": "string",
+            "example": "up"
+          },
+          "health": {
+            "type": "integer",
+            "format": "int32",
+            "example": 100
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+          },
+          "speed": {
+            "type": "integer",
+            "format": "int32",
+            "example": 10
+          },
+          "type": {
+            "type": "string",
+            "example": "normal"
+          },
+          "waitTurns": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "dto.ZpotResponse": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          },
+          "type": {
+            "type": "string",
+            "example": "default"
+          }
+        }
+      },
+      "model.AttackCommand": {
+        "type": "object",
+        "properties": {
+          "blockId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f47ac10b-58cc-0372-8562-0e02b2c3d479"
+          },
+          "target": {
+            "$ref": "#/components/schemas/model.Coordinate"
+          }
+        }
+      },
+      "model.BuildCommand": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "model.Command": {
+        "type": "object",
+        "properties": {
+          "attack": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/model.AttackCommand"
+            }
+          },
+          "build": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/model.BuildCommand"
+            }
+          },
+          "moveBase": {
+            "$ref": "#/components/schemas/model.Coordinate"
+          }
+        }
+      },
+      "model.Coordinate": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "example": 1
+          },
+          "y": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "dto.Round": {
+        "type": "object",
+        "properties": {
+          "duration": {
+            "type": "integer",
+            "example": 60
+          },
+          "endAt": {
+            "type": "string",
+            "example": "2021-01-01T00:00:00Z"
+          },
+          "name": {
+            "type": "string",
+            "example": "Round 1"
+          },
+          "repeat": {
+            "type": "integer",
+            "example": 1
+          },
+          "startAt": {
+            "type": "string",
+            "example": "2021-01-01T00:00:00Z"
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          }
+        }
+      },
+      "dto.RoundList": {
+        "type": "object",
+        "properties": {
+          "gameName": {
+            "type": "string",
+            "example": "defense"
+          },
+          "now": {
+            "type": "string",
+            "example": "2021-01-01T00:00:00Z"
+          },
+          "rounds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.Round"
+            }
+          }
+        }
+      },
+      "puberr.PubErr": {
+        "type": "object",
+        "properties": {
+          "errCode": {
+            "type": "integer",
+            "format": "int32",
+            "example": 22
+          },
+          "error": {
+            "type": "string",
+            "example": "description of the error"
+          }
+        }
+      },
+      "swagger.ErrForbidden": {
+        "type": "object",
+        "properties": {
+          "errCode": {
+            "type": "integer",
+            "format": "int32",
+            "example": 26
+          },
+          "error": {
+            "type": "string",
+            "example": "forbidden or user is banned"
+          }
+        }
+      },
+      "swagger.ErrNotAuthorized": {
+        "type": "object",
+        "properties": {
+          "errCode": {
+            "type": "integer",
+            "format": "int32",
+            "example": 14
+          },
+          "error": {
+            "type": "string",
+            "example": "not authorized"
+          }
+        }
+      },
+      "swagger.ErrNotFound": {
+        "type": "object",
+        "properties": {
+          "errCode": {
+            "type": "integer",
+            "format": "int32",
+            "example": 11
+          },
+          "error": {
+            "type": "string",
+            "example": "not found"
+          }
+        }
+      },
+      "swagger.ErrTooManyUserRequests": {
+        "type": "object",
+        "properties": {
+          "errCode": {
+            "type": "integer",
+            "format": "int32",
+            "example": 24
+          },
+          "error": {
+            "type": "string",
+            "example": "too many requests from this user"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "name": "X-Auth-Token",
+        "in": "header"
+      }
+    }
+  }
+}
